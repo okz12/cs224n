@@ -17,7 +17,6 @@ class PartialParse(object):
         """
         # The sentence being parsed is kept for bookkeeping purposes. Do not alter it in your code.
         self.sentence = sentence
-
         ### YOUR CODE HERE (3 Lines)
         ### Your code should initialize the following fields:
         ###     self.stack: The current stack represented as a list with the top of the stack as the
@@ -30,6 +29,10 @@ class PartialParse(object):
         ###
         ### Note: The root token should be represented with the string "ROOT"
         ###
+
+        self.stack = ["ROOT"]
+        self.buffer = list(sentence)
+        self.dependencies = []
 
 
         ### END YOUR CODE
@@ -50,6 +53,28 @@ class PartialParse(object):
         ###         2. Left Arc
         ###         3. Right Arc
 
+        # Top of stack = end of list in this implementation
+        wi_idx, wj_idx = -2, -1
+
+        # Shift: Remove the first word in the buffer and push it on top of the stack.
+        # (Pre-condition: buffer has to be non-empty.)
+        if transition == "S" and len(self.buffer) > 0:
+            self.stack.append(self.buffer.pop(0))
+
+
+        # Left-Arcr : Add a dependency arc (wj ,r, wi) to the arc set A, where wi is the word second to the top of
+        # the stack and wj is the word at the top of the stack. Remove wi from the stack.
+        # (Precondition: the stack needs to contain at least two items and wi cannot be the ROOT.)
+        elif transition == "LA":
+            self.dependencies.append((self.stack[wj_idx], self.stack[wi_idx]))
+            self.stack.pop(wi_idx)
+
+        # Right-Arcr : Add a dependency arc (wi ,r, wj) to the arc set A, where wi is the word second to the top of
+        # the stack and wj is the word at the top of the stack. Remove wj from the stack.
+        # (Precondition: The stack needs to contain at least two items.)
+        elif transition == "RA":
+            self.dependencies.append((self.stack[wi_idx], self.stack[wj_idx]))
+            self.stack.pop()
 
         ### END YOUR CODE
 
@@ -101,7 +126,17 @@ def minibatch_parse(sentences, model, batch_size):
     ###             to remove objects from the `unfinished_parses` list. This will free the underlying memory that
     ###             is being accessed by `partial_parses` and may cause your code to crash.
 
+    partial_parses = [PartialParse(sentence) for sentence in sentences]
+    unfinished_parses = partial_parses[:]
+    while len(unfinished_parses) > 0:
+        minibatch = unfinished_parses[:batch_size]
+        transitions = model.predict(minibatch)
+        for partial_parse, transition in zip(minibatch, transitions):
+            partial_parse.parse([transition])
+            if len(partial_parse.buffer) == 0 and len(partial_parse.stack) == 1:
+                unfinished_parses.remove(partial_parse)
 
+    dependencies = [partial_parse.dependencies for partial_parse in partial_parses]
     ### END YOUR CODE
 
     return dependencies
